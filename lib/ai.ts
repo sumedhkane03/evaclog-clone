@@ -7,7 +7,11 @@ export interface DetectedItem {
   confidence: number // 0-1
 }
 
-const client = new OpenAI()
+let _client: OpenAI | null = null
+function getClient() {
+  if (!_client) _client = new OpenAI()
+  return _client
+}
 
 const ITEM_SCHEMA = {
   type: "object" as const,
@@ -38,7 +42,7 @@ export async function analyzeRoomPhoto(imageBuffer: Buffer, mediaType: string): 
   const base64 = imageBuffer.toString("base64")
   const dataUrl = `data:${mediaType};base64,${base64}`
 
-  const response = await client.chat.completions.create({
+  const response = await getClient().chat.completions.create({
     model: "gpt-4o",
     response_format: {
       type: "json_schema",
