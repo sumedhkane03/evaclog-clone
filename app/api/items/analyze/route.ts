@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { analyzeRoomPhoto } from "@/lib/ai"
+import { checkRateLimit } from "@/lib/rateLimit"
 import path from "path"
 import fs from "fs/promises"
 
@@ -12,6 +13,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "OPENAI_API_KEY not configured. Add it to .env to enable AI detection." },
       { status: 503 }
+    )
+  }
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
+
+  const userLimit = checkRateLimit(`user:${session.userId}`)
+  const ipLimit = checkRateLimit(`ip:${ip}`)
+
+  if (!userLimit.allowed || !ipLimit.allowed) {
+    const resetAt = Math.max(userLimit.resetAt, ipLimit.resetAt)
+    return NextResponse.json(
+      { error: `Rate limit exceeded. You can analyze up to ${6} photos per hour. Try again after ${new Date(resetAt).toLocaleTimeString()}.` },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) },
+      }
     )
   }
 
